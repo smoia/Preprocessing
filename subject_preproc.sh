@@ -189,10 +189,9 @@ do
 	# [ you can substitute this average step with your code if you prefer ]
 	3dMean -prefix ${tmp}/${anatfile}_echoavg_${anatsuffix}.nii.gz ${tmp}/${anatfile}_echo-?_${anatsuffix}_bfc.nii.gz
 
-	# [ add here resampling with a call to the python script, but also for T2* and optimal combination files! ]
-	# input: ${tmp}/${anatfile}_echo-?_${anatsuffix}_bfc.nii.gz (or ${tmp}/${anatfile}_echoavg_${anatsuffix}.nii.gz) and ${tmp}/${anatfile}_optcom_${anatsuffix}.nii.gz and ${tmp}/${anatfile}_t2star_${anatsuffix}.nii.gz
-	# output: ${tmp}/${anatfile}_echoavg_upsampled_${anatsuffix}.nii.gz and ${tmp}/${anatfile}_optcom_upsampled_${anatsuffix}.nii.gz and ${tmp}/${anatfile}_t2star_upsampled_${anatsuffix}.nii.gz
-
+	# sampling
+	python resample.py ${tmp} ${anatfile} ${anatsuffix} 
+ 
 	# realign to vesselref (first file in input)
 	echo ""
 	echo ""
