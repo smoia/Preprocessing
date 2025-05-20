@@ -1,13 +1,12 @@
 import os
+import re
 import SimpleITK as sitk
 
-
-bids_root = "/OrganizedData" 
-
+bids_root = "/OrganizedData"
 output_root = "sampled7T"
 os.makedirs(output_root, exist_ok=True)
 
-subject_ids = [f"sub-{str(i).zfill(2)}" for i in range(1, 7)]  
+subject_ids = [f"sub-{str(i).zfill(2)}" for i in range(1, 7)]
 
 for sub_id in subject_ids:
     anat_dir = os.path.join(bids_root, sub_id, "ses-7T", "anat")
@@ -19,36 +18,62 @@ for sub_id in subject_ids:
     output_anat_dir = os.path.join(output_root, sub_id, "ses-7T", "anat")
     os.makedirs(output_anat_dir, exist_ok=True)
 
-    # Process each NIfTI file in the anat directory
+    echo_images = []
+    echo_filenames = []
+
     for file_name in os.listdir(anat_dir):
         if file_name.endswith(".nii") or file_name.endswith(".nii.gz"):
             input_path = os.path.join(anat_dir, file_name)
-            output_path = os.path.join(output_anat_dir, file_name)
-
             image = sitk.ReadImage(input_path)
+            echo_images.append(image)
+            echo_filenames.append(file_name)
 
-            # spacing and size
-            original_spacing = image.GetSpacing()
-            original_size = image.GetSize()
+    if len(echo_images) == 0:
+        print(f"No echo images found for {sub_id}")
+        continue
 
-            # upsampling factor
-            upsample_factor = 2.0
+    original_spacing = echo_images[0].GetSpacing()
+    original_size = echo_images[0].GetSize()
 
-            # Calculate new spacing and size
-            new_spacing = [s / upsample_factor for s in original_spacing]
-            new_size = [int(sz * upsample_factor) for sz in original_size]
+    upsample_factor = 2.0
 
-            # Set up the resampler
-            resampler = sitk.ResampleImageFilter()
-            resampler.SetInterpolator(sitk.sitkBSpline)
-            resampler.SetOutputSpacing(new_spacing)
-            resampler.SetSize(new_size)
-            resampler.SetOutputDirection(image.GetDirection())
-            resampler.SetOutputOrigin(image.GetOrigin())
+    new_spacing = [s / upsample_factor for s in original_spacing]
+    new_size = [int(sz * upsample_factor) for sz in original_size]
 
-            # Perform resampling
-            upsampled_image = resampler.Execute(image)
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetInterpolator(sitk.sitkLinear)  # Linear interpolation
+    resampler.SetOutputSpacing(new_spacing)
+    resampler.SetSize(new_size)
+    resampler.SetOutputDirection(echo_images[0].GetDirection())
+    resampler.SetOutputOrigin(echo_images[0].GetOrigin())
 
-            # Save the upsampled image
-            sitk.WriteImage(upsampled_image, output_path)
-            print(f"Upsampled image saved to '{output_path}'.")
+    # Upsample each echo image
+    upsampled_images = [resampler.Execute(img) for img in echo_images]
+ 
+    # Average the upsampled images
+    if len(upsampled_images) > 1:
+        average_image = sitk.Add(upsampled_images[0], upsampled_images[1])
+        for img in upsampled_images[2:]:
+            average_image = sitk.Add(average_image, img)
+        average_image = sitk.Divide(average_image, len(upsampled_images))
+    else:
+        average_image = upsampled_images[0]
+
+    # replace '_echo-<number>' with '_echo-average' for output
+    first_filename = echo_filenames[0]
+    if first_filename.endswith(".nii.gz"):
+        base = first_filename[:-7]
+        ext = ".nii.gz"
+    elif first_filename.endswith(".nii"):
+        base = first_filename[:-4]
+        ext = ".nii"
+    else:
+        base = first_filename
+        ext = ""
+
+    base_no_echo = re.sub(r'_echo-\d+$', '', base)
+    new_filename = base_no_echo + '_echo-average' + ext
+
+    output_path = os.path.join(output_anat_dir, new_filename)
+    sitk.WriteImage(average_image, output_path)
+    print(f"Processed and saved averaged upsampled image: {output_path}")
