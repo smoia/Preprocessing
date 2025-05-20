@@ -2,8 +2,8 @@ import os
 import re
 import SimpleITK as sitk
 
-bids_root = "/OrganizedData"
-output_root = "sampled7T"
+bids_root = "/usr/share/Leena/M3PI/OrganizedData"
+output_root = "/usr/share/Leena/M3PI/Sampled_averaged7T"
 os.makedirs(output_root, exist_ok=True)
 
 subject_ids = [f"sub-{str(i).zfill(2)}" for i in range(1, 7)]
