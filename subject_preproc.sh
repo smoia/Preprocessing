@@ -26,6 +26,7 @@ TEs="9.46 24.66 39.86"
 ### print input
 printline=$( basename -- $0 )
 echo "${printline}" "$@"
+printcall="${printline} $*"
 # Parsing required and optional variables with flags
 # Also checking if a flag is the help request or the version
 while [ ! -z "$1" ]
@@ -53,8 +54,6 @@ checkoptvar TEs tmp debug
 ### Remove nifti suffix
 anat=$( removeniisfx ${anat} )
 
-
-
 ### Cath errors and exit on them
 set -e
 ######################################
@@ -63,54 +62,79 @@ set -e
 
 cwd=$(pwd)
 
-# Parse anat filename and fix folder
-[[ "$anat" =~ sub-([^_]+)_ses-([^_]+)?(_run-([^_]+))? ]] && \
+# Parse anat filename and force right folder's absolute path pt. 1
+workdir=$( dirname $( realpath ${anat} ) | sed -E 's|/sub-[^_]+/ses-[^_]+/anat||')
+anatname=$( basename ${anat} )
+
+if_missing_do stop ${workdir}
+if_missing_do mkdir ${workdir}/derivatives/vessels/logs
+
+# Preparing log folder and log file, removing the previous one
+logfile=${workdir}/derivatives/vessels/logs/${anatname}_log
+replace_and touch ${logfile}
+
+echo "************************************" >> ${logfile}
+
+exec 3>&1 4>&2
+
+exec 1>${logfile} 2>&1
+
+version
+date
+echo ""
+echo ${printcall}
+echo ""
+checkreqvar anat
+checkoptvar TEs tmp debug
+
+echo "************************************"
+echo "************************************"
+
+echo ""
+echo ""
+echo "************************************"
+echo "***    Parse BIDS info ${anatname}"
+echo "************************************"
+echo ""
+echo ""
+
+# Parse anat filename and force right folder's absolute path pt. 2
+[[ "$anat" =~ sub-([^_]+)_ses-([^_]+)(_acq-([^_]+))?(_run-([^_]+))?(_echo-([^_]+))? ]] && \
   sub=${BASH_REMATCH[1]} && \
   ses=${BASH_REMATCH[2]} && \
-  run=${BASH_REMATCH[4]:-}
+  acq=${BASH_REMATCH[4]:-} && \
+  run=${BASH_REMATCH[6]:-} && \
+  echo=${BASH_REMATCH[8]:-}
 
-workdir=$( dirname $( realpath ${anat} ) | sed -E 's|/sub-[^_]+/ses-[^_]+/anat/.*||')
 adir=${workdir}/sub-${sub}/ses-${ses}/anat
 aderivdir=${workdir}/derivatives/vessels/sub-${sub}/ses-${ses}/anat
 rderivdir=${workdir}/derivatives/vessels/sub-${sub}/ses-${ses}/reg
-anat=$( basename ${anat} )
 anatprefix=sub-${sub}_ses-${ses}
-anatsuffix=${anat#*_echo-?_}
-
+anatsuffix=${anatname#*_echo-?_}
 tmp=${tmp}/sub-${sub}_ses-${ses}_vesselsbfc
 
+# First return of variables discovered so far
+checkoptvar workdir anatname sub ses acq run echo adir aderivdir rderivdir anatprefix anatsuffix tmp
 
+
+# Now move to more interesting things
 cd ${adir} || exit 1
 
-#Read and process input
+# Create folders
 if_missing_do mkdir ${tmp}
 if_missing_do mkdir ${aderivdir} ${rderivdir}
 
-anatfiles=()
-
-
-for acqs in invRO normRO
-do
-	workanat=${anatprefix}_acq-${acqs}
-	for echos in 1 2 3
-	do
-		workanatsuffix=echo-${echos}_${anatsuffix}
-		# -n because run is set but maybe empty
-		if [[ -n "${run}" ]]
-		then
-			for runs in 01 02
-			do
-				anatfiles+=("${workanat}_run-${runs}_${workanatsuffix}")
-			done
-		else
-			anatfiles+=("${workanat}_${workanatsuffix}")
-		fi
-	done
-done
-
 # Crop and bias field correct anats
-for anatfile in "${anatfiles[@]}"
+for anatfile in ${anatprefix}_*_${anatsuffix}
 do
+	echo ""
+	echo ""
+	echo "************************************"
+	echo "***    Crop and correct bias field ${anatfile}"
+	echo "************************************"
+	echo ""
+	echo ""
+
 	## 01.Crop 
 	3dAutobox -input ${adir}/${anatfile}.nii.gz -prefix ${tmp}/${anatfile}_ab.nii.gz
 	## 02. Bias Field Correction with ANTs
@@ -122,25 +146,39 @@ do
 done
 
 # Prepare echoes averaging and T2* mapping
-anatfiles_echo=()
+anatfiles=()
 
-for acqs in invRO normRO
+# Check all possible acqs and runs when needed 
+mapfile -t acqs < <(find "${adir}" -type f -printf "%f\n" | grep "${anatsuffix}" | grep -oP '_acq-\K[^_]+' | sort -u)
+
+for a in "${acqs[@]}"
 do
-	workanat=${anatprefix}_acq-${acqs}
-	if [[ -n "${run}" ]]
+	workanat=${anatprefix}_acq-${a}
+
+	mapfile -t runs < <(find "${adir}" -type f -printf "%f\n" | grep "${workanat}" | grep "${anatsuffix}" | grep -oP '_run-\K[^_]+' | sort -u)
+
+	if [ ${#runs[@]} -eq 0 ] || [ -z "${runs[0]}" ] && [ ${#runs[@]} -eq 1 ]
 	then
-		for runs in 01 02
+		for r in "${runs[@]}"
 		do
-			anatfiles_echo+=("${workanat}_run-${run}")
+			anatfiles+=("${workanat}_run-${r}")
 		done
 	else
-		anatfiles_echo+=("${workanat}")
+		anatfiles+=("${workanat}")
 	fi
 done
 
-for i in "${!anatfiles_echo[@]}"
+for i in "${!anatfiles[@]}"
 do
-	anatfile=${anatfiles_echo[i]}
+	anatfile=${anatfiles[i]}
+
+	echo ""
+	echo ""
+	echo "************************************"
+	echo "***    Dealing with echoes of ${anatfile}"
+	echo "************************************"
+	echo ""
+	echo ""
 	
 	# T2* mapping and optimal combination
 	t2smap -d ${tmp}/${anatfile}_echo-?_${anatsuffix}_bfc --masktype none -e "${TEs}" --out-dir ${tmp}/TED
@@ -156,6 +194,13 @@ do
 	# output: ${tmp}/${anatfile}_echoavg_upsampled_${anatsuffix}.nii.gz and ${tmp}/${anatfile}_optcom_upsampled_${anatsuffix}.nii.gz and ${tmp}/${anatfile}_t2star_upsampled_${anatsuffix}.nii.gz
 
 	# realign to vesselref (first file in input)
+	echo ""
+	echo ""
+	echo "************************************"
+	echo "***    Spatially coregister ${anatfile}"
+	echo "************************************"
+	echo ""
+	echo ""
 	if (( i == 0 ))
 	then
 		if_missing_do copy ${tmp}/${anatfile}_echoavg_${anatsuffix} ${rderivdir}/sub-${sub}_ses-${ses}_vesselref_downsampled.nii.gz
@@ -173,10 +218,26 @@ do
 	fi
 done
 
+echo ""
+echo ""
+echo "************************************"
+echo "***    Average ${anatname}"
+echo "************************************"
+echo ""
+echo ""
+
 # Average all echo averages, optcoms, and t2* maps
 3dMean -prefix ${aderivdir}/00.${anatprefix}_${anatsuffix}_esavgd_preprocessed.nii.gz ${aderivdir}/${anatprefix}_*_echoavg_${anatsuffix}2vesselref.nii.gz
 3dMean -prefix ${aderivdir}/00.${anatprefix}_${anatsuffix}_optcom_preprocessed.nii.gz ${aderivdir}/${anatprefix}_*_optcom_${anatsuffix}2vesselref.nii.gz
 3dMean -prefix ${aderivdir}/00.${anatprefix}_${anatsuffix}_t2star_preprocessed.nii.gz ${aderivdir}/${anatprefix}_*_t2star_${anatsuffix}2vesselref.nii.gz
+
+echo ""
+echo ""
+echo "************************************"
+echo "***    Brain extract 00.${anatprefix}_${anatsuffix}_esavgd_preprocessed"
+echo "************************************"
+echo ""
+echo ""
 
 # Brain extraction
 3dSkullStrip -input ${aderivdir}/00.${anatprefix}_${anatsuffix}_esavgd_preprocessed.nii.gz \
@@ -188,5 +249,19 @@ done
 fslmaths ${tmp}/anat_brain.nii.gz -bin ${aderivdir}/00.${anatprefix}_${anatsuffix}_mask
 
 cd ${cwd}
+
+
+# Final output of the preprocessing:
+# ${aderivdir}/00.${anatprefix}_${anatsuffix}_esavgd_preprocessed.nii.gz
+# ${aderivdir}/00.${anatprefix}_${anatsuffix}_optcom_preprocessed.nii.gz
+# ${aderivdir}/00.${anatprefix}_${anatsuffix}_t2star_preprocessed.nii.gz
+# ${aderivdir}/00.${anatprefix}_${anatsuffix}_mask.nii.gz
+
+echo ""
+echo ""
+echo "************************************"
+echo "***    Preproc completed!"
+echo "************************************"
+
 
 if [[ ${debug} == "yes" ]]; then set +x; else rm -rf ${tmp}; fi
