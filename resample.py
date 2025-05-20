@@ -7,8 +7,8 @@ def resample_image(input_path, output_path, upsample_factor=2.0):
     image = sitk.ReadImage(input_path)
     
     # Original spacing and size
-    original_spacing = image.GetSpacing()  # (x, y, z)
-    original_size = image.GetSize()        # (x, y, z)
+    original_spacing = image.GetSpacing()  
+    original_size = image.GetSize()        
     
     # Compute new spacing by dividing each by upsample_factor
     new_spacing = [sp / upsample_factor for sp in original_spacing]
