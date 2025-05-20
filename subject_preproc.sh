@@ -152,26 +152,8 @@ do
 	3dMean -prefix ${tmp}/${anatfile}_echoavg_${anatsuffix}.nii.gz ${tmp}/${anatfile}_echo-?_${anatsuffix}_bfc.nii.gz
 
 	# sampling
-	# Calculate new voxel size dynamically from echoavg image
-	orig_voxel_size=$(fslval ${tmp}/${anatfile}_echoavg_${anatsuffix} pixdim1)
-	new_voxel_size=$(echo "$orig_voxel_size / 2" | bc -l)
-	echo "Subject $anatfile: original voxel size = $orig_voxel_size mm, new voxel size = $new_voxel_size mm"
-	
-	flirt -in ${tmp}/${anatfile}_echoavg_${anatsuffix}.nii.gz \
-	-ref ${tmp}/${anatfile}_echoavg_${anatsuffix}.nii.gz \
-	-out ${tmp}/${anatfile}_echoavg_upsampled_${anatsuffix}.nii.gz \
-	-applyisoxfm $new_voxel_size -interp trilinear
-	
-	flirt -in ${tmp}/${anatfile}_optcom_${anatsuffix}.nii.gz \
-	-ref ${tmp}/${anatfile}_optcom_${anatsuffix}.nii.gz \
-	-out ${tmp}/${anatfile}_optcom_upsampled_${anatsuffix}.nii.gz \
-	-applyisoxfm $new_voxel_size -interp trilinear
-	
-	flirt -in ${tmp}/${anatfile}_t2star_${anatsuffix}.nii.gz \
-	-ref ${tmp}/${anatfile}_t2star_${anatsuffix}.nii.gz \
-	-out ${tmp}/${anatfile}_t2star_upsampled_${anatsuffix}.nii.gz \
-	-applyisoxfm $new_voxel_size -interp trilinear
-
+	python resample.py ${tmp} ${anatfile} ${anatsuffix} 
+ 
 	# realign to vesselref (first file in input)
 	if (( i == 0 ))
 	then
