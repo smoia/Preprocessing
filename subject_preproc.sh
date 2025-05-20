@@ -143,14 +143,9 @@ do
 	anatfile=${anatfiles_echo[i]}
 	
 	# T2* mapping and optimal combination
-	fslmerge -z ${tmp}/${anatfile}_echoesmerged $( ls ${tmp}/${anatfile}_echo-?_${anatsuffix}_bfc )
-
-	cd ${tmp} || exit 1
-	t2smap -d ${tmp}/${anatfile}_echoesmerged -e "${TEs}"
-	fslmaths TED.${anatfile}_echoesmerged/ts_OC.nii.gz ${tmp}/${anatfile}_optcom_${anatsuffix}.nii.gz -odt float
-	fslmaths TED.${anatfile}_echoesmerged/t2svG.nii.gz ${tmp}/${anatfile}_t2star_${anatsuffix}.nii.gz -odt float
-
-	cd ${adir} || exit 1
+	t2smap -d ${tmp}/${anatfile}_echo-?_${anatsuffix}_bfc --masktype none -e "${TEs}" --out-dir ${tmp}/TED
+	fslmaths ${tmp}/TED/desc-optcom_bold.nii.gz ${tmp}/${anatfile}_optcom_${anatsuffix}.nii.gz -odt float
+	fslmaths ${tmp}/TED/T2starmap.nii.gz ${tmp}/${anatfile}_t2star_${anatsuffix}.nii.gz -odt float
 
 	# echo average
 	# [ you can substitute this average step with your code if you prefer ]
