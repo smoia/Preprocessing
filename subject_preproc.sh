@@ -153,7 +153,7 @@ do
 	## 01.Crop based on the first echo
 	if [[ "${echo}" -eq 1 ]]
 	then
-		3dAutobox -extent_ijkord_to_file ${tmp}/${boxfile}_box -noclust ${anatfile}.nii.gz
+		3dAutobox -extent_ijkord_to_file ${tmp}/${boxfile}_box ${anatfile}.nii.gz
 	fi
 
 	coords=$( awk '{ printf "%s %s ", $2, $3 - $2 + 1 }' ${tmp}/${boxfile}_box )
