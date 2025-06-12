@@ -136,7 +136,7 @@ if_missing_do mkdir ${rderivdir}
 [[ ! -d ${rderivdir} ]] && exit 2
 
 # Crop and bias field correct anats
-for anatfile in ${anatprefix}_*_${anatsuffix}
+for anatfile in ${anatprefix}_*_${anatsuffix}.nii.gz
 do
 	anatfile=$( basename $( removeniisfx ${anatfile} ) )
 
@@ -217,18 +217,6 @@ do
 	alias python3=/usr/bin/python3
 	echo "Python: $( which python ) $( which python3 )"
 	echo ""
-
-	echo ""
-	echo "--------------"
-	echo "Running t2smap"
-	echo "--------------"
-	echo "Python: $( which python ) $( which python3 )"
-
-
-	# T2* mapping and optimal combination
-	t2smap -d ${tmp}/${anatfile}_echo-?_${anatsuffix}_bfc.nii.gz --masktype none -e ${TEs} --out-dir ${tmp}/${anatfile}_TED
-	fslmaths ${tmp}/${anatfile}_TED/desc-optcom_bold.nii.gz ${tmp}/${anatfile}_optcom_${anatsuffix}.nii.gz -odt float
-	fslmaths ${tmp}/${anatfile}_TED/T2starmap.nii.gz ${tmp}/${anatfile}_t2star_${anatsuffix}.nii.gz -odt float
 
 	# echo average
 	# [ you can substitute this average step with your code if you prefer ]
