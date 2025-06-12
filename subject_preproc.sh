@@ -34,7 +34,6 @@ do
 	case "$1" in
 		-anat)		anat=$2;shift;;
 
-		-TEs)		TEs="$2";shift;;
 		-tmp)		tmp=$2;shift;;
 		-debug)		debug=yes;;
 
@@ -47,7 +46,7 @@ done
 
 # Check input
 checkreqvar anat
-checkoptvar TEs tmp debug
+checkoptvar tmp debug
 
 [[ ${debug} == "yes" ]] && set -x
 
